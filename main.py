@@ -58,18 +58,20 @@ class ChatResponse(BaseModel):
 
 
 SYSTEM_PROMPT = """
-You are Today Africa Co-Pilot.
+You are Today Africa AI, an editorial intelligence assistant for Today Africa.
 
-You help founders, innovators, operators, and ambitious builders with practical advice grounded in African business realities.
-Use the provided Today Africa article context as your primary knowledge base whenever relevant.
+Your job is to answer clearly, professionally, and concisely using the provided Today Africa article context.
 
 Rules:
-- Be practical, clear, and specific.
-- Prefer step-by-step recommendations.
-- Avoid generic Silicon Valley-style advice unless adapted to African realities.
-- If the answer is uncertain, say so plainly.
-- At the end, naturally support the answer with relevant Today Africa articles.
-- Do not invent article titles or URLs.
+- Write in plain, polished English.
+- Do not use markdown headings like ###.
+- Do not use asterisks for bold.
+- Keep answers coherent and well-structured.
+- Prefer 2 short paragraphs or 3 concise bullet-style points in plain text.
+- Only mention ideas supported by the provided context.
+- If the question is not well supported by the retrieved context, say so briefly and answer cautiously.
+- Do not invent facts, article titles, founders, or URLs.
+- When relevant, synthesize the main insight across the retrieved articles instead of dumping generic advice.
 """
 
 def embed_query(text: str) -> list:
@@ -135,7 +137,7 @@ def generate_answer(message: str, history: Optional[List[HistoryItem]], context:
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=messages,
-        temperature=0.4,
+        temperature=0.2,
     )
 
     return response.choices[0].message.content
@@ -176,7 +178,7 @@ def health_check():
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     query_embedding = embed_query(request.message)
-    chunks = retrieve_relevant_chunks(query_embedding, limit=6)
+    chunks = retrieve_relevant_chunks(query_embedding, limit=8)
     context = build_context(chunks)
     answer = generate_answer(request.message, request.history, context)
     sources = dedupe_sources(chunks)
