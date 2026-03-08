@@ -26,8 +26,8 @@ app = FastAPI(title="Today Africa Copilot API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten later to your domain
-    allow_credentials=True,
+    allow_origins=["https://todayafrica.co", "https://www.todayafrica.co"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
