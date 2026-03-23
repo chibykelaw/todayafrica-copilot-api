@@ -32,8 +32,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-conn = psycopg2.connect(DB_URL)
-conn.autocommit = True
+def get_db_connection():
+    conn = psycopg2.connect(DB_URL)
+    conn.autocommit = True
+    return conn
 
 
 class HistoryItem(BaseModel):
@@ -82,31 +84,35 @@ def embed_query(text: str) -> list:
     return response.data[0].embedding
 
 
-def retrieve_relevant_chunks(query_embedding, limit=6):
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT
-                ac.content,
-                a.title,
-                a.url
-            FROM article_chunks ac
-            JOIN articles a ON a.id = ac.article_id
-            ORDER BY ac.embedding <-> %s::vector
-            LIMIT %s
-            """,
-            (query_embedding, limit)
-        )
-        rows = cur.fetchall()
+def retrieve_relevant_chunks(query_embedding, limit=8):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    ac.content,
+                    a.title,
+                    a.url
+                FROM article_chunks ac
+                JOIN articles a ON a.id = ac.article_id
+                ORDER BY ac.embedding <-> %s::vector
+                LIMIT %s
+                """,
+                (query_embedding, limit)
+            )
+            rows = cur.fetchall()
 
-    results = []
-    for row in rows:
-        results.append({
-            "content": row[0],
-            "title": row[1],
-            "url": row[2]
-        })
-    return results
+        results = []
+        for row in rows:
+            results.append({
+                "content": row[0],
+                "title": row[1],
+                "url": row[2]
+            })
+        return results
+    finally:
+        conn.close()
 
 
 def build_context(chunks):
@@ -160,15 +166,18 @@ def dedupe_sources(chunks):
 
 
 def log_query(question: str, answer: str, article_url: Optional[str]):
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO copilot_queries (question, answer, source_url)
-            VALUES (%s, %s, %s)
-            """,
-            (question, answer, article_url)
-        )
-
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO copilot_queries (question, answer, source_url)
+                VALUES (%s, %s, %s)
+                """,
+                (question, answer, article_url)
+            )
+    finally:
+        conn.close()
 
 @app.get("/")
 def health_check():
