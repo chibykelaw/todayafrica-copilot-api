@@ -2,16 +2,18 @@ import os
 from typing import List, Optional
 
 import psycopg2
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from openai import OpenAI
+from ingestion import run_ingestion
 
 load_dotenv()
 
 DB_URL = os.getenv("SUPABASE_DB_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+INGESTION_SECRET = os.getenv("INGESTION_SECRET")
 
 if not DB_URL or not OPENAI_API_KEY:
     raise ValueError("Missing SUPABASE_DB_URL or OPENAI_API_KEY in .env")
@@ -23,6 +25,10 @@ client = OpenAI(
 )
 
 app = FastAPI(title="Today Africa Copilot API")
+INGESTION_SECRET = os.getenv("INGESTION_SECRET")
+
+if not INGESTION_SECRET:
+    raise ValueError("INGESTION_SECRET is not set in environment variables")
 
 app.add_middleware(
     CORSMiddleware,
@@ -198,3 +204,15 @@ def chat(request: ChatRequest):
         answer=answer,
         sources=[SourceItem(**source) for source in sources]
     )
+
+@app.post("/admin/ingest")
+def admin_ingest(x_ingestion_secret: str = Header(None)):
+    if x_ingestion_secret != INGESTION_SECRET:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        run_ingestion()
+        return {"status": "ok", "message": "Ingestion completed"}
+    except Exception as e:
+        print("INGESTION ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail=str(e))
